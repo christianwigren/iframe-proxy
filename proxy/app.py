@@ -1,5 +1,6 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response, stream_with_context
 import requests
+import os
 
 app = Flask(__name__, static_folder=None)
 
@@ -19,6 +20,13 @@ def authenticate_request():
         return True
     return False
 
+
+# A generator function to stream the response from the target server
+def stream_response(response):
+    for chunk in response.iter_content(chunk_size=1024):
+        if chunk:
+            yield chunk
+            
 
 # A function to forward the request to the target server
 def forward_request(path):
@@ -45,9 +53,10 @@ def forward_request(path):
     else:
         return jsonify({"error": "Method not allowed"}), 405
     
-    # Return the response content, status code, and headers
-    return (response.content, response.status_code, response.headers.items())
+    # Stream the response back to the client
+    flask_response = Response(stream_with_context(stream_response(response)), status=response.status_code, headers=dict(response.headers))
 
+    return flask_response
 
 
 @app.route('/', defaults={'path': ''})
